@@ -40,3 +40,16 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+const CACHE_VERSION = 'v2'; // Povećajte broj pri svakom deployu
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames
+          .filter(name => name !== CACHE_VERSION)
+          .map(name => caches.delete(name))
+      );
+    })
+  );
+});
