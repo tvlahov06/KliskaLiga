@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+
+  <title>Kliška Liga</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+
+  <!-- Tvoj postojeći CSS ostaje ovdje -->
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial; }
+    .layout-wide { display: grid; grid-template-columns: 1fr 420px; gap: 24px; align-items: start; }
+    .layout-wide.knockout-mode { display: block; }
+    @media (max-width: 1024px) { .layout-wide { display: block; } }
+    .bracket-col { display:flex; flex-direction:column; align-items:center; gap:20px; min-width:260px; }
+    .match-card { width:240px; position:relative; }
+    input[type="number"], input[type="text"], select {
+      background: white;
+      color: #0f172a;
+    }
+    .dark input[type="number"], .dark input[type="text"], .dark select {
+      background: #374151;
+      color: #f8fafc;
+      border-color: #4b5563;
+    }
+    .group-header { color: #374151; }
+    .dark .group-header { color: #d1d5db; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-gray-100 min-h-screen">
+
+<header class="sticky top-0 z-30 bg-gradient-to-r from-green-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 text-white shadow">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <img src="logo.png" alt="logo" class="w-10 h-10 rounded-full object-contain" onerror="this.style.display='none'">
+      <h1 class="text-2xl font-bold">Kliška Liga</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="resetTurnira()" class="px-3 py-2 rounded bg-red-600 hover:bg-red-700 text-white">Reset</button>
+      <button id="themeToggle" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto p-4 space-y-6">
+  <section id="setupSection" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+    <h2 class="text-xl font-bold mb-4">Postavke turnira</h2>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <label class="block text-sm font-medium">Dodaj klub</label>
+        <div class="flex gap-2 mt-2">
+          <input id="noviKlubInput" type="text" placeholder="Unesite naziv kluba..." class="flex-1 px-4 py-2 rounded border dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+          <button onclick="dodajKlub()" class="px-4 py-2 bg-blue-600 text-white rounded">+ Dodaj</button>
+        </div>
+        <div id="kluboviLista" class="mt-3"></div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Datum turnira</label>
+        <input id="datumTurnira" type="date" class="w-full mt-2 px-3 py-2 rounded border dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+        <label class="block text-sm font-medium mt-4">Format natjecanja</label>
+        <div class="mt-2 space-y-2">
+          <label class="flex items-center p-3 border rounded cursor-pointer"><input type="radio" name="format" value="liga" checked onchange="promijenFormat()"> <span class="ml-3">Liga</span></label>
+          <label class="flex items-center p-3 border rounded cursor-pointer"><input type="radio" name="format" value="grupe" onchange="promijenFormat()"> <span class="ml-3">Grupe</span></label>
+          <label class="flex items-center p-3 border rounded cursor-pointer"><input type="radio" name="format" value="knockout" onchange="promijenFormat()"> <span class="ml-3">Knockout (na ispadanje)</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center gap-3">
+      <input id="kuciVankaCheck" type="checkbox" checked />
+      <label for="kuciVankaCheck">Igraj kući i vanka (dvostruki susreti)</label>
+    </div>
+    <div id="grupeDiv" class="mt-4" style="display:none;">
+      <label class="block text-sm font-medium">Broj grupa</label>
+      <input id="brojGrupa" type="number" min="2" max="8" value="2" onchange="generisiGrupeInput()" class="w-full mt-2 px-3 py-2 rounded border dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+      <div id="grupeKonfiguracija" class="mt-3"></div>
+    </div>
+    <div class="mt-4 flex gap-3">
+      <button id="generisiBtn" onclick="generisiUtakmice()" class="hidden px-6 py-2 bg-green-600 text-white rounded">Generiraj utakmice</button>
+      <button onclick="resetTurnira()" class="px-6 py-2 bg-red-600 text-white rounded">Resetiraj turnir</button>
+    </div>
+  </section>
+
+  <section id="utakmiceSection" style="display:none;">
+    <div class="layout-wide">
+      <div id="utakmiceCard" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+        <h2 class="text-2xl font-bold mb-4">Utakmice</h2>
+        <div id="utakmiceLista" class="space-y-4 overflow-auto" style="max-height: 70vh;"></div>
+      </div>
+      <div id="tablicaCard" class="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+        <h2 class="text-2xl font-bold mb-4">Tablica</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="border-b"><tr><th>#</th><th>Klub</th><th>O</th><th>P</th><th>N</th><th>I</th><th>GD</th><th>GP</th><th>GR</th><th>Bod</th></tr></thead>
+            <tbody id="tablicaBody" class="[&>tr:nth-child(odd)]:bg-gray-50 dark:[&>tr:nth-child(odd)]:bg-gray-800/40"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+let klubovi = [];
+let utakmice = [];
+let generirano = false;
+let grupe = {};
+let knockout = { rounds: [] };
+
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function dodajKlub() {
+  const v = document.getElementById('noviKlubInput').value.trim();
+  if (!v) return;
+  if (klubovi.includes(v)) { alert('Klub već postoji'); return; }
+  klubovi.push(v);
+  document.getElementById('noviKlubInput').value = '';
+  prikaziKlubove();
+  provjeriGenerisiBtn();
+  spremiPodatke();
+}
+
+function prikaziKlubove() {
+  const el = document.getElementById('kluboviLista');
+  if (klubovi.length === 0) { el.innerHTML = '<p class="text-sm text-gray-500">Nema klubova</p>'; return; }
+  el.innerHTML = `<div class="space-y-2"><h3 class="font-semibold">Klubovi (${klubovi.length})</h3>` +
+    klubovi.map((k,i) => `<div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded"><span>${i+1}. ${k}</span><button onclick="ukloniKlub(${i})" class="text-red-600">✖</button></div>`).join('') + `</div>`;
+}
+
+function ukloniKlub(i) {
+  klubovi.splice(i,1);
+  prikaziKlubove();
+  provjeriGenerisiBtn();
+  spremiPodatke();
+}
+
+function provjeriGenerisiBtn() {
+  const btn = document.getElementById('generisiBtn');
+  btn.classList.toggle('hidden', klubovi.length < 2);
+}
+
+function promijenFormat() {
+  const f = document.querySelector('input[name="format"]:checked').value;
+  document.getElementById('grupeDiv').style.display = f === 'grupe' ? 'block' : 'none';
+}
+
+function generisiGrupeInput() {
+  const broj = parseInt(document.getElementById('brojGrupa').value) || 2;
+  const div = document.getElementById('grupeKonfiguracija');
+  let html = '';
+  for (let i=0;i<broj;i++) {
+    const letter = String.fromCharCode(65+i);
+    html += `<div class="mt-2"><label class="block text-sm font-medium group-header">Grupa ${letter} - broj klubova</label><input type="number" id="grupa_${i}" min="2" class="w-full mt-1 px-3 py-2 rounded border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" value="2"></div>`;
+  }
+  div.innerHTML = html;
+}
+
+function generisiUtakmice() {
+  const format = document.querySelector('input[name="format"]:checked').value;
+  if (klubovi.length < 2) { alert('Dodajte barem 2 kluba'); return; }
+  if (format === 'knockout' && klubovi.length > 16) { alert('Knockout podržava maksimalno 16 klubova'); return; }
+  utakmice = []; grupe = {}; knockout = { rounds: [] };
+  if (format === 'liga') generisiLiga();
+  else if (format === 'grupe') generisiGrupe();
+  else generisiKnockout();
+  generirano = true;
+  document.getElementById('setupSection').style.display = 'none';
+  document.getElementById('utakmiceSection').style.display = 'block';
+  prikaziUtakmice();
+  if (format !== 'knockout') prikaziTablicu();
+  spremiPodatke();
+}
+
+function generisiLiga() {
+  const homeAway = document.getElementById('kuciVankaCheck').checked;
+  let shuffled = shuffleArray([...klubovi]);
+  
+  // Ako je neparan broj timova, dodaj "BYE" (slobodno kolo)
+  if (shuffled.length % 2 !== 0) {
+    shuffled.push('BYE');
+  }
+  
+  const numTeams = shuffled.length;
+  const numRounds = numTeams - 1;
+  const matchesPerRound = numTeams / 2;
+  
+  // Round-robin algoritam
+  const rounds = [];
+  
+  for (let round = 0; round < numRounds; round++) {
+    const roundMatches = [];
+    
+    for (let match = 0; match < matchesPerRound; match++) {
+      let home = (round + match) % (numTeams - 1);
+      let away = (numTeams - 1 - match + round) % (numTeams - 1);
+      
+      // Zadnji tim je uvijek fiksiran
+      if (match === 0) {
+        away = numTeams - 1;
+      }
+      
+      // Alterniraj domaćina/gosta za balans
+      if (round % 2 === 1) {
+        [home, away] = [away, home];
+      }
+      
+      const domaci = shuffled[home];
+      const gosti = shuffled[away];
+      
+      // Preskoči ako je BYE
+      if (domaci !== 'BYE' && gosti !== 'BYE') {
+        roundMatches.push({ domaci, gosti, golD: '', golG: '' });
+      }
+    }
+    
+    rounds.push(roundMatches);
+  }
+  
+  // Dodaj sve prve utakmice (kolo po kolo)
+  rounds.forEach(round => {
+    round.forEach(match => {
+      utakmice.push(match);
+    });
+  });
+  
+  // Dodaj uzvratne utakmice (ako je homeAway)
+  if (homeAway) {
+    rounds.forEach(round => {
+      round.forEach(match => {
+        utakmice.push({ domaci: match.gosti, gosti: match.domaci, golD: '', golG: '' });
+      });
+    });
+  }
+}
+function generisiGrupe() {
+  const broj = parseInt(document.getElementById("brojGrupa").value);
+  const ukupno = klubovi.length;
+  const shuffled = shuffleArray([...klubovi]);
+  if (broj < 2) { alert("Minimalno 2 grupe."); return; }
+  if (ukupno < broj) { alert("Broj klubova je manji od broja grupa!"); return; }
+  grupe = {};
+  utakmice = [];
+  const base = Math.floor(ukupno / broj);        
+  const extras = ukupno % broj;
+  let index = 0;
+  
+  for (let i = 1; i <= broj; i++) {
+    const vel = base + (i <= extras ? 1 : 0);
+    const naziv = "Grupa " + String.fromCharCode(64 + i);
+    const timovi = shuffled.slice(index, index + vel);
+    grupe[naziv] = timovi;
+    index += vel;
+    const homeAway = document.getElementById("kuciVankaCheck").checked;
+    
+    // Prvo dodaj SVE prve utakmice
+    for (let a = 0; a < timovi.length; a++) {
+      for (let b = a + 1; b < timovi.length; b++) {
+        utakmice.push({ grupa: naziv, domaci: timovi[a], gosti: timovi[b], golD: "", golG: "" });
+      }
+    }
+    
+    // Zatim dodaj SVE uzvratne utakmice (ako je homeAway)
+    if (homeAway) {
+      for (let a = 0; a < timovi.length; a++) {
+        for (let b = a + 1; b < timovi.length; b++) {
+          utakmice.push({ grupa: naziv, domaci: timovi[b], gosti: timovi[a], golD: "", golG: "" });
+        }
+      }
+    }
+  }
+}
+
+function prikaziUtakmice() {
+  const container = document.getElementById('utakmiceLista');
+  container.innerHTML = '';
+  const format = document.querySelector('input[name="format"]:checked').value;
+  const layoutWide = document.querySelector('.layout-wide');
+if (format === "knockout") {
+  document.getElementById("tablicaCard").style.display = "none";
+  if (layoutWide) layoutWide.classList.add('knockout-mode');
+} else {
+  document.getElementById("tablicaCard").style.display = "block";
+  if (layoutWide) layoutWide.classList.remove('knockout-mode');
+}
+  if (!generirano) return;
+  if (format === 'knockout') { prikaziKnockout(); return; }
+  const homeAway = document.getElementById('kuciVankaCheck').checked;
+  let html = '';
+if (format === 'grupe') {
+  Object.keys(grupe).forEach(g => {
+    html += `<h3 class="font-semibold group-header mt-4">${g}</h3>`;
+    const matches = utakmice.filter(u => u.grupa === g);
+    if (homeAway) {
+      // Podijeli utakmice na prve i uzvratne
+      const half = matches.length / 2;
+      const prveUtakmice = matches.slice(0, half);
+      const uzvratneUtakmice = matches.slice(half);
+      
+      html += `<div class="grid md:grid-cols-2 gap-4">`;
+      html += `<div><h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Prva kola</h4><div class="space-y-3">${prveUtakmice.map((m)=>generirajUtakmicuHTML(m, utakmice.indexOf(m))).join('')}</div></div>`;
+      html += `<div><h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Uzvratne utakmice</h4><div class="space-y-3">${uzvratneUtakmice.map((m)=>generirajUtakmicuHTML(m, utakmice.indexOf(m))).join('')}</div></div>`;
+      html += `</div>`;
+    } else {
+      html += `<div class="space-y-3">${matches.map(m=>generirajUtakmicuHTML(m, utakmice.indexOf(m))).join('')}</div>`;
+    }
+  });
+} else {
+    if (homeAway) {
+      // Podijeli utakmice na prve i uzvratne
+      const half = utakmice.length / 2;
+      const prveUtakmice = utakmice.slice(0, half);
+      const uzvratneUtakmice = utakmice.slice(half);
+      
+      html += `<div class="grid md:grid-cols-2 gap-4">`;
+      html += `<div><h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Prva kola</h4><div class="space-y-3">${prveUtakmice.map((m,idx)=>generirajUtakmicuHTML(m, idx)).join('')}</div></div>`;
+      html += `<div><h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Uzvratne utakmice</h4><div class="space-y-3">${uzvratneUtakmice.map((m,idx)=>generirajUtakmicuHTML(m, idx+half)).join('')}</div></div>`;
+      html += `</div>`;
+    } else {
+      html += `<div class="space-y-3">${utakmice.map((m,idx)=>generirajUtakmicuHTML(m, idx)).join('')}</div>`;
+    }
+  }
+  container.innerHTML = html;
+  utakmice.forEach((u, idx) => {
+    const d = document.getElementById('domacin-' + idx);
+    const g = document.getElementById('gost-' + idx);
+    if (d) d.onchange = () => unesiRezultat(u, d.value, g ? g.value : '');
+    if (g) g.onchange = () => unesiRezultat(u, d ? d.value : '', g.value);
+  });
+}
+
+function generirajUtakmicuHTML(u, idx) {
+  const odigrano = u.golD !== '' && u.golG !== '';
+  const cardClass = odigrano ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600';
+  return `<div class="p-4 rounded-lg border-2 ${cardClass}">
+    <div class="flex items-center justify-between mb-3">
+      <span class="font-semibold text-gray-800 dark:text-gray-200">${u.domaci}</span>
+      <span class="text-gray-500 dark:text-gray-400">vs</span>
+      <span class="font-semibold text-gray-800 dark:text-gray-200">${u.gosti}</span>
+    </div>
+    <div class="flex items-center justify-center gap-2">
+      <input type="number" min="0" id="domacin-${idx}" value="${u.golD || ''}" class="w-20 px-3 py-2 border rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+      <span class="text-gray-500 font-bold">:</span>
+      <input type="number" min="0" id="gost-${idx}" value="${u.golG || ''}" class="w-20 px-3 py-2 border rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" />
+    </div></div>`;
+}
+
+function unesiRezultat(u, valD, valG) {
+  u.golD = valD === '' ? '' : String(parseInt(valD));
+  u.golG = valG === '' ? '' : String(parseInt(valG));
+  prikaziUtakmice();
+  prikaziTablicu();
+  spremiPodatke();
+}
+
+function prikaziTablicu() {
+  const format = document.querySelector('input[name="format"]:checked').value;
+  const tbody = document.getElementById('tablicaBody');
+  tbody.innerHTML = '';
+  if (format === 'knockout') return;
+  if (format === 'grupe') {
+    let html = '';
+    Object.keys(grupe).forEach(g => {
+      const teams = grupe[g];
+      const table = teams.map(t=>({klub:t, od:0, p:0, n:0, i:0, dali:0, prim:0, gr:0, bod:0}));
+      utakmice.filter(u=>u.grupa===g && u.golD!=='' && u.golG!=='').forEach(u=>{
+        const d = table.find(x=>x.klub===u.domaci);
+        const gg = table.find(x=>x.klub===u.gosti);
+        d.od++; gg.od++;
+        d.dali += parseInt(u.golD); d.prim += parseInt(u.golG);
+        gg.dali += parseInt(u.golG); gg.prim += parseInt(u.golD);
+        if (parseInt(u.golD) > parseInt(u.golG)) { d.p++; d.bod += 3; gg.i++; }
+        else if (parseInt(u.golD) < parseInt(u.golG)) { gg.p++; gg.bod += 3; d.i++; }
+        else { d.n++; gg.n++; d.bod++; gg.bod++; }
+      });
+      table.forEach(t=> t.gr = t.dali - t.prim);
+      table.sort((a,b)=> b.bod - a.bod || b.gr - a.gr || b.dali - a.dali);
+      html += `<tr><td colspan="10" class="py-2 font-semibold group-header">${g}</td></tr>`;
+      table.forEach((row, idx) => {
+        const klubName = idx === 0 ? `<strong class="font-bold">${row.klub}</strong>` : row.klub;
+        html += `<tr class="border-b"><td class="py-2 px-2">${idx+1}</td><td class="py-2 px-2">${klubName}</td><td class="text-center py-2 px-1">${row.od}</td><td class="text-center py-2 px-1">${row.p}</td><td class="text-center py-2 px-1">${row.n}</td><td class="text-center py-2 px-1">${row.i}</td><td class="text-center py-2 px-1">${row.dali}</td><td class="text-center py-2 px-1">${row.prim}</td><td class="text-center py-2 px-1">${row.gr>0? '+'+row.gr : row.gr}</td><td class="text-center py-2 px-1 font-bold text-blue-600 dark:text-blue-400">${row.bod}</td></tr>`;
+      });
+    });
+    tbody.innerHTML = html;
+  } else {
+    const table = klubovi.map(k=>({klub:k, od:0, p:0, n:0, i:0, dali:0, prim:0, gr:0, bod:0}));
+    utakmice.filter(u=>u.golD!=='' && u.golG!=='').forEach(u=>{
+      const d = table.find(x=>x.klub===u.domaci);
+      const g = table.find(x=>x.klub===u.gosti);
+      d.od++; g.od++;
+      d.dali += parseInt(u.golD); d.prim += parseInt(u.golG);
+      g.dali += parseInt(u.golG); g.prim += parseInt(u.golD);
+      if (parseInt(u.golD) > parseInt(u.golG)) { d.p++; d.bod += 3; g.i++; }
+      else if (parseInt(u.golD) < parseInt(u.golG)) { g.p++; g.bod += 3; d.i++; }
+      else { d.n++; g.n++; d.bod++; g.bod++; }
+    });
+    table.forEach(t=> t.gr = t.dali - t.prim);
+    table.sort((a,b)=> b.bod - a.bod || b.gr - a.gr || b.dali - a.dali);
+    let html = '';
+    table.forEach((row, idx) => {
+      const klubName = idx === 0 ? `<strong class="font-bold">${row.klub}</strong>` : row.klub;
+      html += `<tr class="border-b"><td class="py-2 px-2">${idx+1}</td><td class="py-2 px-2">${klubName}</td><td class="text-center py-2 px-1">${row.od}</td><td class="text-center py-2 px-1">${row.p}</td><td class="text-center py-2 px-1">${row.n}</td><td class="text-center py-2 px-1">${row.i}</td><td class="text-center py-2 px-1">${row.dali}</td><td class="text-center py-2 px-1">${row.prim}</td><td class="text-center py-2 px-1">${row.gr>0? '+'+row.gr : row.gr}</td><td class="text-center py-2 px-1 font-bold text-blue-600 dark:text-blue-400">${row.bod}</td></tr>`;
+    });
+    tbody.innerHTML = html;
+  }
+}
+
+function nextPowerOf2(n) { let p=1; while(p<n) p*=2; return p; }
+
+function generisiKnockout() {
+  let seeds = [...klubovi].sort(()=>Math.random()-0.5);
+  const target = nextPowerOf2(seeds.length);
+  const byes = target - seeds.length;
+  for (let i=0;i<byes;i++) seeds.push('BYE');
+  const homeAway = document.getElementById('kuciVankaCheck').checked;
+  const pairs = [];
+  for (let i=0;i<seeds.length;i+=2) pairs.push({ a: seeds[i], b: seeds[i+1] });
+  const firstRoundMatches = [];
+  pairs.forEach((p, idx) => {
+    if (homeAway) {
+      firstRoundMatches.push({ pair: idx, leg: 1, domaci: p.a, gosti: p.b, golD:'', golG:'', winner: null });
+      firstRoundMatches.push({ pair: idx, leg: 2, domaci: p.b, gosti: p.a, golD:'', golG:'', winner: null });
+    } else {
+      firstRoundMatches.push({ pair: idx, leg: 1, domaci: p.a, gosti: p.b, golD:'', golG:'', winner: null });
+    }
+  });
+  const roundsCount = Math.log2(target);
+  const rounds = [];
+  rounds.push({ naziv: roundsCount===3 ? 'Četvrtfinale' : `Kolo 1`, matches: firstRoundMatches });
+  for (let r=1;r<roundsCount;r++) {
+  const matchesCount = Math.pow(2, roundsCount - r - 1);
+  const matches = [];
+  const isFinale = (roundsCount - r === 1);
+  
+  // Polufinale i ostali krugovi (osim finala) imaju dvomeč ako je homeAway uključeno
+  if (homeAway && !isFinale) {
+    for (let m=0;m<matchesCount;m++) {
+      matches.push({ domaci: null, gosti: null, golD:'', golG:'', winner: null, pair: m, leg: 1 });
+      matches.push({ domaci: null, gosti: null, golD:'', golG:'', winner: null, pair: m, leg: 2 });
+    }
+  } else {
+    // Finale ili jednomeč sustav
+    for (let m=0;m<matchesCount;m++) {
+      matches.push({ domaci: null, gosti: null, golD:'', golG:'', winner: null, pair: m });
+    }
+  }
+  
+  let naziv = (roundsCount - r === 2) ? 'Polufinale' : (roundsCount - r === 1 ? 'Finale' : `Kolo ${r+1}`);
+  rounds.push({ naziv, matches });
+}
+// Dodaj "bracket" za pobjednika
+rounds.push({ 
+  naziv: '🏆 Pobjednik', 
+  matches: [{ domaci: null, gosti: null, golD: '', golG: '', winner: null, isPobjednik: true }] 
+});
+  knockout.rounds = rounds;
+  propagateKnockout();
+}
+function prikaziKnockout() {
+  const cont = document.getElementById("utakmiceLista");
+  cont.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "flex gap-6 overflow-auto pb-4";
+  knockout.rounds.forEach((round, rIdx) => {
+    const col = document.createElement("div");
+    col.className = "bracket-col";
+    const title = document.createElement("h3");
+title.className = "font-semibold";
+title.textContent = round.naziv;
+col.appendChild(title);
+
+// Provjeri je li ovo "Pobjednik" bracket
+if (round.matches[0] && round.matches[0].isPobjednik) {
+  const m = round.matches[0];
+  const card = document.createElement("div");
+  card.className = "match-card bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/40 p-6 border-4 border-yellow-400 dark:border-yellow-600 rounded-xl shadow-lg";
+  
+  if (m.winner) {
+    card.innerHTML = `
+      <div class="text-center">
+        <div class="text-5xl mb-3">🏆</div>
+        <div class="text-2xl font-bold text-gray-800 dark:text-yellow-100">${m.winner}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-300 mt-2">Prvak turnira</div>
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="text-center">
+        <div class="text-5xl mb-3 opacity-30">🏆</div>
+        <div class="text-lg text-gray-500 dark:text-gray-400">Čeka se pobjednik</div>
+      </div>
+    `;
+  }
+  
+  col.appendChild(card);
+} else if (round.matches.some(m => m.leg === 2)) {
+      const ids = [...new Set(round.matches.map(m => m.pair))];
+      ids.forEach(pid => {
+        const legs = round.matches.filter(m => m.pair === pid).sort((a, b) => a.leg - b.leg);
+        const box = document.createElement("div");
+        box.className = "mb-4";
+        legs.forEach((m) => {
+          const card = document.createElement("div");
+          const odigrano = m.golD !== '' && m.golG !== '';
+          const cardClass = odigrano ? 'match-card bg-green-50 dark:bg-green-900/20 p-3 border-2 border-green-300 dark:border-green-700 rounded-md mb-2' : 'match-card bg-gray-50 dark:bg-gray-700 p-3 border rounded-md mb-2';
+card.className = cardClass;
+          card.innerHTML = `<div class="text-center font-semibold">${m.domaci}</div><div class="text-center text-sm text-gray-500">vs</div><div class="text-center font-semibold">${m.gosti}</div>`;
+          const inp1 = document.createElement("input");
+          const inp2 = document.createElement("input");
+          inp1.type = inp2.type = "number";
+          inp1.min = inp2.min = 0;
+          inp1.value = m.golD || "";
+          inp2.value = m.golG || "";
+          inp1.className = "w-full mt-2 text-center px-1 py-1 rounded border bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+          inp2.className = "w-full mt-1 text-center px-1 py-1 rounded border bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+          inp1.onchange = () => onKOchange_new(rIdx, m.pair, m.leg, inp1.value, inp2.value);
+          inp2.onchange = () => onKOchange_new(rIdx, m.pair, m.leg, inp1.value, inp2.value);
+          card.appendChild(inp1);
+          card.appendChild(inp2);
+          const w = document.createElement("div");
+          w.className = "text-xs text-gray-500 mt-2";
+          w.textContent = m.winner || "—";
+          card.appendChild(w);
+          box.appendChild(card);
+        });
+        col.appendChild(box);
+      });
+    } else {
+      round.matches.forEach((m, midx) => {
+        const card = document.createElement("div");
+const odigrano = m.golD !== '' && m.golG !== '';
+const cardClass = odigrano ? 'match-card bg-green-50 dark:bg-green-900/20 p-3 border-2 border-green-300 dark:border-green-700 rounded-md mb-3' : 'match-card bg-gray-50 dark:bg-gray-700 p-3 border rounded-md mb-3';
+card.className = cardClass;
+        card.innerHTML = `<div class="text-center font-semibold">${m.domaci || "—"}</div><div class="text-center text-sm text-gray-500">vs</div><div class="text-center font-semibold">${m.gosti || "—"}</div>`;
+        const inp1 = document.createElement("input");
+        const inp2 = document.createElement("input");
+        inp1.type = inp2.type = "number";
+        inp1.min = inp2.min = 0;
+        inp1.value = m.golD || "";
+        inp2.value = m.golG || "";
+        inp1.className = "w-full mt-2 text-center px-1 py-1 rounded border bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+        inp2.className = "w-full mt-1 text-center px-1 py-1 rounded border bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+        inp1.onchange = () => onKOchange_new(rIdx, midx, 1, inp1.value, inp2.value);
+        inp2.onchange = () => onKOchange_new(rIdx, midx, 1, inp1.value, inp2.value);
+        card.appendChild(inp1);
+        card.appendChild(inp2);
+        const w = document.createElement("div");
+        w.className = "text-xs text-gray-500 mt-2";
+        w.textContent = m.winner || "—";
+        card.appendChild(w);
+        col.appendChild(card);
+      });
+    }
+    wrap.appendChild(col);
+  });
+  cont.appendChild(wrap);
+}
+
+function onKOchange_new(rIdx, id, leg, v1, v2) {
+  const round = knockout.rounds[rIdx];
+  if (!round) return;
+  
+  // Provjeri ima li ovaj krug leg sistem
+  const hasLegs = round.matches.some(m => m.leg !== undefined);
+  
+  if (hasLegs) {
+    // Krug ima leg sistem (dvomeč)
+    const matchObj = round.matches.find(m => m.pair === id && m.leg === leg);
+    if (!matchObj) return;
+    
+    matchObj.golD = v1 === '' ? '' : String(parseInt(v1));
+    matchObj.golG = v2 === '' ? '' : String(parseInt(v2));
+    
+    // Pronađi sve utakmice u ovom paru
+    const pairMatches = round.matches.filter(m => m.pair === id);
+    
+    if (pairMatches.length === 2) {
+      // Dvomeč - računaj agregat
+      const m1 = pairMatches.find(m => m.leg === 1);
+      const m2 = pairMatches.find(m => m.leg === 2);
+      
+      if (m1 && m2 && m1.golD !== '' && m1.golG !== '' && m2.golD !== '' && m2.golG !== '') {
+        const teamA = m1.domaci;
+        const teamB = m1.gosti;
+        const aGoals = parseInt(m1.golD) + parseInt(m2.golG);
+        const bGoals = parseInt(m1.golG) + parseInt(m2.golD);
+        
+        if (aGoals > bGoals) {
+          pairMatches.forEach(p => p.winner = teamA);
+        } else if (bGoals > aGoals) {
+          pairMatches.forEach(p => p.winner = teamB);
+        } else {
+          // Izjednačeno - pravilo gola u gostima
+          const aAway = parseInt(m2.golG);
+          const bAway = parseInt(m1.golG);
+          if (aAway > bAway) pairMatches.forEach(p => p.winner = teamA);
+          else if (bAway > aAway) pairMatches.forEach(p => p.winner = teamB);
+          else {
+            // Coin flip
+            const win = (id % 2 === 0) ? teamA : teamB;
+            pairMatches.forEach(p => p.winner = win);
+          }
+        }
+      } else {
+        // Još nisu obje utakmice odigrane
+        pairMatches.forEach(p => p.winner = null);
+      }
+    } else {
+      // Samo jedna utakmica (ne bi se trebalo dogoditi ako hasLegs === true)
+      if (matchObj.golD !== '' && matchObj.golG !== '') {
+        if (parseInt(matchObj.golD) > parseInt(matchObj.golG)) matchObj.winner = matchObj.domaci;
+        else if (parseInt(matchObj.golD) < parseInt(matchObj.golG)) matchObj.winner = matchObj.gosti;
+        else matchObj.winner = Math.random() > 0.5 ? matchObj.domaci : matchObj.gosti;
+      } else matchObj.winner = null;
+    }
+  } else {
+    // Krug NEMA leg sistem (jednomeč)
+    const match = knockout.rounds[rIdx].matches[id];
+    if (!match) return;
+    
+    match.golD = v1 === '' ? '' : String(parseInt(v1));
+    match.golG = v2 === '' ? '' : String(parseInt(v2));
+    
+    if (match.golD !== '' && match.golG !== '') {
+      if (parseInt(match.golD) > parseInt(match.golG)) match.winner = match.domaci;
+      else if (parseInt(match.golD) < parseInt(match.golG)) match.winner = match.gosti;
+      else {
+        // Remis - coin flip
+        match.winner = Math.random() > 0.5 ? match.domaci : match.gosti;
+      }
+    } else match.winner = null;
+  }
+  
+  propagateKnockout();
+  prikaziKnockout();
+  spremiPodatke();
+}
+
+function propagateKnockout() {
+  for (let r = 0; r < knockout.rounds.length - 1; r++) {
+    const cur = knockout.rounds[r];
+    const next = knockout.rounds[r+1];
+    if (!cur || !next) continue;
+    
+    // Provjeri ima li trenutni krug leg sistem (dvomeč)
+    const hasLegs = cur.matches.some(m => m.leg !== undefined);
+    
+    // **NOVA PROVJERA**: Provjeri jesu li SVE utakmice u trenutnom krugu odigrane
+    let sveOdigrane = true;
+    if (hasLegs) {
+      // Za leg sistem - provjeri sve parove
+      const pairIds = [...new Set(cur.matches.map(m => m.pair))];
+      for (let pid of pairIds) {
+        const pairMatches = cur.matches.filter(m => m.pair === pid);
+        const sveUParu = pairMatches.every(m => m.golD !== '' && m.golG !== '');
+        if (!sveUParu) {
+          sveOdigrane = false;
+          break;
+        }
+      }
+    } else {
+      // Za jednomeč - provjeri sve utakmice
+      sveOdigrane = cur.matches.every(m => m.golD !== '' && m.golG !== '');
+    }
+    
+    // Ako NISU sve odigrane, očisti sljedeći krug i preskoči propagaciju
+    if (!sveOdigrane) {
+      // Očisti timove u sljedećem krugu
+      const nextHasLegs = next.matches.some(m => m.leg !== undefined);
+      if (nextHasLegs) {
+        next.matches.forEach(m => {
+          m.domaci = null;
+          m.gosti = null;
+          m.golD = '';
+          m.golG = '';
+          m.winner = null;
+        });
+      } else {
+        next.matches.forEach(m => {
+          m.domaci = null;
+          m.gosti = null;
+          m.golD = '';
+          m.golG = '';
+          m.winner = null;
+        });
+      }
+      continue; // Preskoči na sljedeći krug
+    }
+    
+    // SVE utakmice su odigrane - nastavi s propagacijom
+    if (hasLegs) {
+      // Za krugove s parovima/leg sistemom
+      const pairIds = [...new Set(cur.matches.map(m => m.pair))].sort((a,b) => a-b);
+      
+      pairIds.forEach((pid, idx) => {
+        const pairMatches = cur.matches.filter(m => m.pair === pid);
+        const winnerMatch = pairMatches.find(m => m.winner && m.winner !== 'REMIS');
+        const winner = winnerMatch ? winnerMatch.winner : null;
+        
+        const nextMatchIdx = Math.floor(idx / 2);
+        
+        // Provjeri ima li sljedeći krug leg sistem
+        const nextHasLegs = next.matches.some(m => m.leg !== undefined);
+        
+        if (nextHasLegs) {
+          // Sljedeći krug ima dvomeč - postavi domaci/gosti za OBA lega
+          const leg1 = next.matches.find(m => m.pair === nextMatchIdx && m.leg === 1);
+          const leg2 = next.matches.find(m => m.pair === nextMatchIdx && m.leg === 2);
+          
+          if (idx % 2 === 0) {
+            if (leg1) leg1.domaci = winner;
+            if (leg2) leg2.gosti = winner;
+          } else {
+            if (leg1) leg1.gosti = winner;
+            if (leg2) leg2.domaci = winner;
+          }
+        } else {
+          // Sljedeći krug nema dvomeč (obična utakmica)
+          if (next.matches[nextMatchIdx]) {
+            if (idx % 2 === 0) {
+              next.matches[nextMatchIdx].domaci = winner;
+            } else {
+              next.matches[nextMatchIdx].gosti = winner;
+            }
+          }
+        }
+      });
+    } else {
+      // Standardni krugovi bez leg sistema
+      for (let i = 0; i < cur.matches.length; i++) {
+        const winner = cur.matches[i].winner;
+        const target = Math.floor(i / 2);
+        if (winner && winner !== 'REMIS') {
+          if (i % 2 === 0) {
+            next.matches[target].domaci = winner;
+          } else {
+            next.matches[target].gosti = winner;
+          }
+        }
+      }
+    }
+  }
+  
+  // Postavi pobjednika turnira - samo ako je finale POTPUNO odigrano
+  if (knockout.rounds.length >= 2) {
+    const finaleRound = knockout.rounds[knockout.rounds.length - 2];
+    const pobjednikRound = knockout.rounds[knockout.rounds.length - 1];
+    
+    if (finaleRound && pobjednikRound && pobjednikRound.matches[0]) {
+      // Provjeri ima li finale leg sistem (dvomeč)
+      const finaleHasLegs = finaleRound.matches.some(m => m.leg !== undefined);
+      
+      let finaleOdigrano = false;
+      let pobjednik = null;
+      
+      if (finaleHasLegs) {
+        // Finale ima dvomeč - provjeri su li OBE utakmice odigrane
+        const finalePair = finaleRound.matches.filter(m => m.pair === 0);
+        const sveSuOdigrane = finalePair.every(m => m.golD !== '' && m.golG !== '');
+        
+        if (sveSuOdigrane && finalePair[0].winner) {
+          finaleOdigrano = true;
+          pobjednik = finalePair[0].winner;
+        }
+      } else {
+        // Finale je jednomeč - provjeri je li odigrano
+        const finaleMatch = finaleRound.matches[0];
+        if (finaleMatch.golD !== '' && finaleMatch.golG !== '' && finaleMatch.winner) {
+          finaleOdigrano = true;
+          pobjednik = finaleMatch.winner;
+        }
+      }
+      
+      if (finaleOdigrano && pobjednik && pobjednik !== 'REMIS') {
+        pobjednikRound.matches[0].domaci = pobjednik;
+        pobjednikRound.matches[0].winner = pobjednik;
+      } else {
+        // Finale nije još odigrano - očisti pobjednika
+        pobjednikRound.matches[0].domaci = null;
+        pobjednikRound.matches[0].winner = null;
+      }
+    }
+  }
+  
+  // Auto-advance BYE
+  knockout.rounds.forEach(round => {
+    round.matches.forEach(m => {
+      if (m.domaci && (!m.gosti || m.gosti === 'BYE') && !m.winner) m.winner = m.domaci;
+      if (m.gosti && (!m.domaci || m.domaci === 'BYE') && !m.winner) m.winner = m.gosti;
+    });
+  });
+}
+function spremiPodatke() {
+  const format = document.querySelector('input[name="format"]:checked').value;
+  const data = { klubovi, utakmice, generirano, grupe, knockout, format, datum: document.getElementById('datumTurnira').value, kuciVanka: document.getElementById('kuciVankaCheck').checked };
+  localStorage.setItem('kliska_liga_v2', JSON.stringify(data));
+}
+
+function ucitajPodatke() {
+  const s = localStorage.getItem('kliska_liga_v2');
+  if (!s) {
+    prikaziKlubove();
+    provjeriGenerisiBtn();
+    return;
+  }
+  const d = JSON.parse(s);
+  klubovi = d.klubovi || [];
+  utakmice = d.utakmice || [];
+  generirano = d.generirano || false;
+  grupe = d.grupe || {};
+  knockout = d.knockout || { rounds: [] };
+  if (d.format) {
+    const r = document.querySelector(`input[name="format"][value="${d.format}"]`);
+    if (r) r.checked = true;
+  }
+  document.getElementById('datumTurnira').value = d.datum || '';
+  document.getElementById('kuciVankaCheck').checked = d.kuciVanka !== false;
+  prikaziKlubove();
+  provjeriGenerisiBtn();
+  if (generirano) {
+    document.getElementById('setupSection').style.display = 'none';
+    document.getElementById('utakmiceSection').style.display = 'block';
+    prikaziUtakmice();
+    const format = document.querySelector('input[name="format"]:checked').value;
+    if (format !== 'knockout') prikaziTablicu();
+  }
+}
+
+function resetTurnira() {
+  if (!confirm('Sigurno resetirati turnir?')) return;
+  klubovi = []; utakmice = []; generirano = false; grupe = {}; knockout = { rounds: [] };
+  localStorage.removeItem('kliska_liga_v2');
+  document.getElementById('setupSection').style.display = 'block';
+  document.getElementById('utakmiceSection').style.display = 'none';
+  prikaziKlubove();
+  provjeriGenerisiBtn();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  ucitajPodatke();
+  document.getElementById('noviKlubInput').addEventListener('keypress', (e) => { 
+    if (e.key === 'Enter') dodajKlub(); 
+  });
+  provjeriGenerisiBtn();
+  
+  const themeToggle = document.getElementById('themeToggle');
+  if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+    themeToggle.textContent = '☀️';
+  } else {
+    themeToggle.textContent = '🌙';
+  }
+  themeToggle.addEventListener('click', () => {
+    document.documentElement.classList.toggle('dark');
+    localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    themeToggle.textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+  });
+});
+
+</script>
+
+<!-- PWA Service Worker registracija -->
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js")
+    .then(() => console.log("SW registriran"))
+    .catch(err => console.log("SW greška:", err));
+}
+</script>
+
+</body>
+</html>
